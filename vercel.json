@@ -1,0 +1,15 @@
+{
+  "builds": [
+    { "src": "api/*.py", "use": "@vercel/python" },
+    {
+      "src": "vite.config.js",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "dist" }
+    }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ],
+  "python": { "version": "3.11" }
+}

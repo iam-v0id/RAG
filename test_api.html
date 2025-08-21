@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>API Test</title>
+  </head>
+  <body>
+    <h1>RAG API Test</h1>
+    <button onclick="testDocsAPI()">Test /api/docs</button>
+    <button onclick="testSearchAPI()">Test /api/search</button>
+    <div id="results"></div>
+
+    <script>
+      async function testDocsAPI() {
+          const resultsDiv = document.getElementById('results');
+          resultsDiv.innerHTML = 'Testing /api/docs...';
+
+          try {
+              const response = await fetch('/api/docs');
+              const data = await response.json();
+
+              resultsDiv.innerHTML = `
+                  <h3>/api/docs Response:</h3>
+                  <p>Status: ${response.status}</p>
+                  <p>Documents found: ${data.items ? data.items.length : 0}</p>
+                  <pre>${JSON.stringify(data, null, 2)}</pre>
+              `;
+          } catch (error) {
+              resultsDiv.innerHTML = `
+                  <h3>Error:</h3>
+                  <p>${error.message}</p>
+              `;
+          }
+      }
+
+      async function testSearchAPI() {
+          const resultsDiv = document.getElementById('results');
+          resultsDiv.innerHTML = 'Testing /api/search...';
+
+          try {
+              const response = await fetch('/api/search', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ query: 'test' })
+              });
+              const data = await response.json();
+
+              resultsDiv.innerHTML = `
+                  <h3>/api/search Response:</h3>
+                  <p>Status: ${response.status}</p>
+                  <pre>${JSON.stringify(data, null, 2)}</pre>
+              `;
+          } catch (error) {
+              resultsDiv.innerHTML = `
+                  <h3>Error:</h3>
+                  <p>${error.message}</p>
+              `;
+          }
+      }
+    </script>
+  </body>
+</html>
