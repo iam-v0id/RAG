@@ -9,7 +9,11 @@ CURRENT_DIR = os.path.dirname(__file__)
 if CURRENT_DIR not in sys.path:
     sys.path.append(CURRENT_DIR)
 
-from core.search import init_clients, _pinecone_index
+try:
+    from core.search import init_clients, _pinecone_index
+except ImportError as e:
+    print(f"Import error: {e}")
+    _pinecone_index = None
 
 
 class handler(BaseHTTPRequestHandler):
@@ -22,8 +26,29 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
+            # Check if required environment variables are set
+            if not os.getenv("PINECONE_API_KEY"):
+                self.send_response(500)
+                self.send_header("Content-type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                error_response = {
+                    "error": "Missing PINECONE_API_KEY environment variable"
+                }
+                self.wfile.write(json.dumps(error_response).encode())
+                return
+
             # Initialize clients
-            init_clients()
+            try:
+                init_clients()
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                error_response = {"error": f"Failed to initialize clients: {str(e)}"}
+                self.wfile.write(json.dumps(error_response).encode())
+                return
 
             # Use registry namespace
             ns = os.getenv("DOCS_NAMESPACE", "docs_registry")
@@ -68,9 +93,10 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response).encode())
 
         except Exception as e:
+            print(f"Error in docs endpoint: {e}")
             self.send_response(500)
             self.send_header("Content-type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            error_response = {"error": "Internal server error"}
+            error_response = {"error": f"Internal server error: {str(e)}"}
             self.wfile.write(json.dumps(error_response).encode())
