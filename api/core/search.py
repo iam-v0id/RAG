@@ -95,21 +95,43 @@ def init_clients():
         raise RuntimeError("Missing PINECONE_API_KEY in environment.")
     if _pc is None:
         try:
+            print(f"Initializing Pinecone client...")
             _pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
+            print(f"Pinecone client initialized successfully")
+
             try:
+                print(f"Listing existing indexes...")
                 existing = [idx.name for idx in _pc.list_indexes().indexes]
+                print(f"Found indexes: {existing}")
             except Exception as e:
                 print(f"Warning: Could not list existing indexes: {e}")
                 existing = []
+
             if PINECONE_INDEX_NAME not in existing:
-                _pc.create_index(
-                    name=PINECONE_INDEX_NAME,
-                    dimension=384,
-                    metric="cosine",
-                    spec=ServerlessSpec(cloud=PINECONE_CLOUD, region=PINECONE_REGION),
-                )
+                print(f"Index '{PINECONE_INDEX_NAME}' not found, creating...")
+                try:
+                    _pc.create_index(
+                        name=PINECONE_INDEX_NAME,
+                        dimension=384,
+                        metric="cosine",
+                        spec=ServerlessSpec(
+                            cloud=PINECONE_CLOUD, region=PINECONE_REGION
+                        ),
+                    )
+                    print(f"Index '{PINECONE_INDEX_NAME}' created successfully")
+                except Exception as create_error:
+                    raise RuntimeError(
+                        f"Failed to create index '{PINECONE_INDEX_NAME}': {create_error}"
+                    )
+            else:
+                print(f"Index '{PINECONE_INDEX_NAME}' already exists")
+
+            print(f"Getting index '{PINECONE_INDEX_NAME}'...")
             _pinecone_index = _pc.Index(PINECONE_INDEX_NAME)
+            print(f"Index '{PINECONE_INDEX_NAME}' retrieved successfully")
+
         except Exception as e:
+            print(f"Pinecone initialization error: {e}")
             raise RuntimeError(f"Failed to initialize Pinecone: {e}")
 
     # Note: Using Hugging Face API for embeddings instead of local models

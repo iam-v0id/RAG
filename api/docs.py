@@ -6,6 +6,7 @@ import sys
 from typing import Optional
 import pathlib
 from urllib.parse import urlparse, parse_qs
+import datetime
 
 # Load .env from repo root (or nearest) for local/dev runs
 try:
@@ -52,6 +53,14 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
+            # Check for test parameter
+            parsed_url = urlparse(self.path)
+            query_params = parse_qs(parsed_url.query)
+
+            # If ?test=true, return a simple connection test
+            if query_params.get("test") == ["true"]:
+                return self._handle_test_request()
+
             # Diagnostic: check env vars first and short-circuit with a clear response
             required_vars = [
                 "PINECONE_API_KEY",
@@ -188,4 +197,65 @@ class handler(BaseHTTPRequestHandler):
                 "type": type(e).__name__,
                 "details": str(e),
             }
+            self.wfile.write(json.dumps(error_response).encode())
+
+    def _handle_test_request(self):
+        """Handle test requests to verify Pinecone connection"""
+        try:
+            # Test 1: Check environment variables
+            env_status = {
+                "PINECONE_API_KEY": bool(os.getenv("PINECONE_API_KEY")),
+                "PINECONE_INDEX_NAME": os.getenv("PINECONE_INDEX_NAME", "company-docs"),
+                "PINECONE_CLOUD": os.getenv("PINECONE_CLOUD", "aws"),
+                "PINECONE_REGION": os.getenv("PINECONE_REGION", "us-east-1"),
+            }
+
+            # Test 2: Try to initialize Pinecone client
+            pinecone_status = {
+                "client_initialized": False,
+                "index_exists": False,
+                "error": None,
+            }
+            try:
+                from pinecone import Pinecone
+
+                pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
+                pinecone_status["client_initialized"] = True
+
+                # Test 3: List indexes
+                indexes = pc.list_indexes()
+                index_names = [idx.name for idx in indexes.indexes]
+                pinecone_status["available_indexes"] = index_names
+                pinecone_status["index_exists"] = (
+                    os.getenv("PINECONE_INDEX_NAME", "company-docs") in index_names
+                )
+
+            except Exception as e:
+                pinecone_status["error"] = str(e)
+
+            payload = {
+                "ok": True,
+                "test": True,
+                "timestamp": str(datetime.datetime.now()),
+                "environment": env_status,
+                "pinecone": pinecone_status,
+            }
+
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps(payload).encode())
+
+        except Exception as e:
+            error_response = {
+                "ok": False,
+                "test": True,
+                "error": str(e),
+                "timestamp": str(datetime.datetime.now()),
+            }
+            self.send_response(500)
+            self.send_header("Content-type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
             self.wfile.write(json.dumps(error_response).encode())
