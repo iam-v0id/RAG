@@ -1,4 +1,8 @@
-# Vercel serverless function for docs endpoint
+"""
+Vercel serverless function for docs endpoint
+Lists all documents in the Pinecone index
+"""
+
 from http.server import BaseHTTPRequestHandler
 import json
 import os
@@ -13,7 +17,6 @@ try:
     from core.search import init_clients
     import core.search
 except ImportError as e:
-    print(f"Import error: {e}")
     core = None
 
 

@@ -93,7 +93,6 @@ def init_clients():
                 spec=ServerlessSpec(cloud=PINECONE_CLOUD, region=PINECONE_REGION),
             )
         _pinecone_index = _pc.Index(PINECONE_INDEX_NAME)
-        print(f"DEBUG: Pinecone index initialized: {_pinecone_index}")
     except Exception as e:
         raise RuntimeError(f"Failed to initialize Pinecone: {e}")
 
@@ -268,22 +267,10 @@ def to_pc_filter(flt: Dict[str, Any]) -> Dict[str, Any]:
 def pinecone_search(
     query: str, k: int, filter_meta: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
-    print(f"DEBUG: pinecone_search called")
-    print(f"DEBUG: Query: '{query}'")
-    print(f"DEBUG: k: {k}")
-    print(f"DEBUG: filter_meta: {filter_meta}")
-    print(f"DEBUG: _pinecone_index: {_pinecone_index}")
-    print(f"DEBUG: _hf_model: {_hf_model}")
-
     if _pinecone_index is None:
-        print(f"DEBUG: Missing Pinecone index")
         return []
 
-    print(f"DEBUG: Embedding query...")
     qvec = embed_texts([query])[0]
-    print(f"DEBUG: Query vector length: {len(qvec)}")
-
-    print(f"DEBUG: Querying Pinecone...")
     res = _pinecone_index.query(
         vector=qvec,
         top_k=k,
@@ -291,10 +278,9 @@ def pinecone_search(
         filter=filter_meta or {},
         namespace=RAG_INDEX_NAMESPACE,
     )
-    print(f"DEBUG: Pinecone query completed")
-    print(f"DEBUG: Number of matches: {len(res.matches or [])}")
+
     hits: List[Dict[str, Any]] = []
-    for i, m in enumerate(res.matches or []):
+    for m in res.matches or []:
         md = m.metadata or {}
         hit = {
             "id": md.get("chunk_id") or m.id,
@@ -308,16 +294,7 @@ def pinecone_search(
             "chunk_count": md.get("chunk_count", 0),
             "score": float(m.score),
         }
-        print(f"DEBUG: Hit {i+1}:")
-        print(f"  - ID: {hit['id']}")
-        print(f"  - Doc ID: {hit['doc_id']}")
-        print(f"  - Title: {hit['title']}")
-        print(f"  - Score: {hit['score']}")
-        print(
-            f"  - Content preview: {hit['content'][:100] if hit['content'] else 'None'}..."
-        )
         hits.append(hit)
-    print(f"DEBUG: Returning {len(hits)} hits")
     return hits
 
 
@@ -373,20 +350,9 @@ def call_llm_rerank_and_generate(prompt: str) -> Dict[str, Any]:
     Expects STRICT JSON: {"ranked_indices":[...], "answer":"..."}
     Returns {} on failure (caller will fallback).
     """
-    print(
-        f"DEBUG: call_llm_rerank_and_generate called with prompt length: {len(prompt)}"
-    )
-    print(f"DEBUG: Prompt preview: {prompt[:300]}...")
-
     # Prefer Groq if configured
     try:
         if GROQ_API_KEY:
-            print(f"DEBUG: Using Groq API")
-            print(f"DEBUG: GROQ_API_KEY: {GROQ_API_KEY[:10]}...")
-            print(f"DEBUG: GROQ_BASE_URL: {GROQ_BASE_URL}")
-            print(f"DEBUG: GROQ_MODEL: {GROQ_MODEL}")
-
-            # Try using OpenAI library with minimal configuration
             from openai import OpenAI  # type: ignore
 
             client = OpenAI(api_key=GROQ_API_KEY, base_url=GROQ_BASE_URL)
@@ -398,12 +364,9 @@ def call_llm_rerank_and_generate(prompt: str) -> Dict[str, Any]:
                 max_tokens=1000,
             )
             text = (resp.choices[0].message.content or "").strip()
-            print(f"DEBUG: Groq response received, length: {len(text)}")
         else:
             if not OPENAI_API_KEY:
-                print(f"DEBUG: No API keys configured")
                 return {}
-            print(f"DEBUG: Using OpenAI API")
             from openai import OpenAI  # type: ignore
 
             client = OpenAI(api_key=OPENAI_API_KEY)
@@ -414,61 +377,41 @@ def call_llm_rerank_and_generate(prompt: str) -> Dict[str, Any]:
                 response_format={"type": "json_object"},
             )
             text = (resp.choices[0].message.content or "").strip()
-            print(f"DEBUG: OpenAI response received, length: {len(text)}")
-        print(f"DEBUG: Raw LLM response: {text}")
 
         # Defensive JSON extraction if any stray tokens appear
         m = re.search(r"\{.*\}", text, flags=re.S)
         json_text = m.group(0) if m else text
-        print(f"DEBUG: Extracted JSON text: {json_text}")
 
         obj = json.loads(json_text)
-        print(f"DEBUG: Parsed JSON object: {obj}")
 
         if not isinstance(obj, dict):
-            print(f"DEBUG: Object is not a dict")
             return {}
         if "ranked_indices" not in obj or "answer" not in obj:
-            print(f"DEBUG: Missing required keys in JSON")
             return {}
         if not isinstance(obj["ranked_indices"], list) or not isinstance(
             obj["answer"], str
         ):
-            print(f"DEBUG: Invalid types in JSON")
             return {}
         # validate indices are ints
         if not all(isinstance(x, int) for x in obj["ranked_indices"]):
-            print(f"DEBUG: Invalid indices in JSON")
             return {}
 
-        print(f"DEBUG: Successfully parsed LLM response")
         return obj
     except Exception as e:
-        print(f"DEBUG: Exception in LLM call: {e}")
         return {"_error": str(e)}
 
 
 def single_call_rerank_and_generate(
     query: str, hits: List[Dict[str, Any]], return_k: int
 ) -> Dict[str, Any]:
-    print(f"DEBUG: single_call_rerank_and_generate called")
-    print(f"DEBUG: Query: '{query}'")
-    print(f"DEBUG: Number of hits: {len(hits)}")
-    print(f"DEBUG: return_k: {return_k}")
-
     if not hits:
-        print(f"DEBUG: No hits, returning empty result")
         return {"ranked": [], "answer": "No relevant sources found."}
 
     prompt = build_single_call_prompt(query, hits, return_k)
-    print(f"DEBUG: Built prompt, length: {len(prompt)}")
-
     obj = call_llm_rerank_and_generate(prompt)
-    print(f"DEBUG: LLM returned object: {obj}")
 
     if not obj:
         # Fallback: no LLM or parsing failed
-        print(f"DEBUG: LLM failed, using fallback")
         ranked = hits[:return_k]
         answer = f"Found {len(ranked)} relevant source chunk(s). No generator configured; returning sources only."
         return {"ranked": ranked, "answer": answer}
@@ -517,7 +460,6 @@ def handler(request):
       - query: dict (for GET query params)
     Returns dict with statusCode, headers, body (string).
     """
-    print(f"DEBUG: Handler called with method: {request.get('method')}")
     try:
         method = (request.get("method") or "GET").upper()
 
@@ -546,17 +488,14 @@ def handler(request):
 
         if method == "POST":
             t0 = now_ms()
-            print(f"DEBUG: POST request received")
             init_clients()
 
             raw = request.get("body") or b"{}"
             if isinstance(raw, str):
                 raw = raw.encode("utf-8")
             data = json.loads(raw.decode("utf-8")) if raw else {}
-            print(f"DEBUG: Parsed POST data: {data}")
 
             action = (data.get("action") or "query").lower()
-            print(f"DEBUG: Action: {action}")
 
             if action == "ingest":
                 # Expect docs: List[Dict] with {id, title, department, category, year, content}
@@ -584,7 +523,6 @@ def handler(request):
 
             # Default: query flow (single LLM call for rerank + generation)
             query = (data.get("query") or "").strip()
-            print(f"DEBUG: Query: '{query}'")
             if not query:
                 return {
                     "statusCode": 400,
@@ -596,33 +534,18 @@ def handler(request):
                 }
 
             filters = data.get("filters") or {}
-            print(f"DEBUG: Filters: {filters}")
             top_k = clamp(int(data.get("topK") or RAG_TOP_K), 1, 50)
             return_k = clamp(int(data.get("returnK") or RAG_RETURN_K), 1, top_k)
-            print(f"DEBUG: top_k={top_k}, return_k={return_k}")
 
             pc_filter = to_pc_filter(filters)
-            print(f"DEBUG: Pinecone filter: {pc_filter}")
 
             # 1) Retrieve candidates
-            print(f"DEBUG: Searching Pinecone...")
             hits = pinecone_search(query, k=top_k, filter_meta=pc_filter)
-            print(f"DEBUG: Pinecone returned {len(hits)} hits")
-            if hits:
-                print(f"DEBUG: First hit score: {hits[0].get('score')}")
-                print(
-                    f"DEBUG: First hit content preview: {hits[0].get('content', '')[:100]}"
-                )
-                print(f"DEBUG: First hit metadata: {dict(hits[0])}")
 
             # 2) Single LLM call: rerank + generate
-            print(f"DEBUG: Calling LLM for rerank and generation...")
             outcome = single_call_rerank_and_generate(query, hits, return_k=return_k)
-            print(f"DEBUG: LLM outcome: {outcome}")
             selected = outcome.get("ranked", [])
             answer = outcome.get("answer", "")
-            print(f"DEBUG: Final answer: '{answer}'")
-            print(f"DEBUG: Selected sources count: {len(selected)}")
 
             # Build sources in displayed order, assign citations [Source N]
             sources = [

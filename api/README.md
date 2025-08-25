@@ -37,7 +37,7 @@ Required environment variables:
 
 - `PINECONE_API_KEY` - Pinecone API key
 - `PINECONE_INDEX_NAME` - Pinecone index name (default: "company-docs")
-- `OPENAI_API_KEY` or `GROQ_API_KEY` - LLM API key for generation
+- `HUGGINGFACE_API_KEY` - Hugging Face API key for embeddings
 
 Optional:
 
@@ -45,14 +45,14 @@ Optional:
 - `PINECONE_REGION` - Pinecone region (default: "us-east-1")
 - `RAG_INDEX_NAMESPACE` - Namespace for RAG documents
 - `DOCS_NAMESPACE` - Namespace for document registry (default: "docs_registry")
-- `RAG_MODEL_NAME` - Embedding model (default: "all-MiniLM-L6-v2")
-- `GEN_LLM_MODEL` - OpenAI model (default: "gpt-4o-mini")
-- `GROQ_MODEL` - Groq model (default: "llama-3.3-70b-versatile")
+- `HF_EMBED_MODEL` - Embedding model (default: "BAAI/bge-small-en-v1.5")
+- `OPENAI_API_KEY` - OpenAI API key for generation
+- `GROQ_API_KEY` - Groq API key for generation (preferred over OpenAI)
 
-## Deployment
+## Features
 
-This is configured for Vercel deployment with the following setup:
-
-- Python serverless functions for API endpoints
-- Static build for React frontend
-- Proper routing configuration in `vercel.json`
+- **Vector Search**: Uses Pinecone for semantic document retrieval
+- **Embeddings**: BAAI/bge-small-en-v1.5 model via Hugging Face API
+- **Document Processing**: Automatic chunking and metadata extraction
+- **LLM Integration**: Support for OpenAI and Groq APIs
+- **CORS Support**: Full CORS headers for frontend integration

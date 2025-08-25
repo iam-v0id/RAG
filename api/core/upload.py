@@ -87,45 +87,19 @@ def handler(request):
 
         # Chunk and store the document using the same logic as search.py
         chunk_records = make_chunk_records(doc)
-        print(f"DEBUG: Created {len(chunk_records)} chunks for document {doc_id}")
-
-        if Pinecone is None:
-            return _json(None, 500, {"error": "Pinecone SDK not installed"})
-        api_key = os.getenv("PINECONE_API_KEY")
-        index_name = os.getenv("PINECONE_INDEX_NAME") or "company-docs"
-        if not api_key:
-            return _json(None, 500, {"error": "Missing PINECONE_API_KEY"})
-        _pc = Pinecone(api_key=api_key)
-        # Ensure index exists (384 dims to match MiniLM embeddings)
-        try:
-            existing = [idx.name for idx in _pc.list_indexes().indexes]
-        except Exception:
-            existing = []
-        if index_name not in existing:
-            cloud = os.getenv("PINECONE_CLOUD", "aws")
-            region = os.getenv("PINECONE_REGION", "us-east-1")
-            _pc.create_index(
-                name=index_name,
-                dimension=384,
-                metric="cosine",
-                spec=ServerlessSpec(cloud=cloud, region=region),
-            )
-        index = _pc.Index(index_name)
 
         # Store chunks in the main RAG namespace (same as search.py uses)
-        rag_namespace = os.getenv("RAG_INDEX_NAMESPACE")
         embed_and_upsert(chunk_records)
-        print(
-            f"DEBUG: Stored {len(chunk_records)} chunks in namespace: {rag_namespace}"
-        )
 
         # Also store a registry entry for document listing
         registry_namespace = os.getenv("DOCS_NAMESPACE", "docs_registry")
-        index.upsert(
+        from core.search import _pinecone_index
+
+        _pinecone_index.upsert(
             vectors=[
                 {
                     "id": f"doc::{doc_id}",
-                    "values": embed_texts([f"{title}\n{content}"])[0],
+                    "values": [0.0] * 384,  # Dummy vector for registry
                     "metadata": {
                         "doc_id": doc_id,
                         "title": title,
@@ -133,10 +107,7 @@ def handler(request):
                         "category": category,
                         "year": year,
                         "chunk_count": len(chunk_records),
-                        "uploaded_at": __import__("datetime")
-                        .datetime.utcnow()
-                        .isoformat()
-                        + "Z",
+                        "uploaded_at": time.strftime("%Y-%m-%d %H:%M:%S"),
                     },
                 }
             ],

@@ -1,12 +1,75 @@
-# React + Vite
+# RAG Play - Retrieval-Augmented Generation System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A modern RAG (Retrieval-Augmented Generation) system built with React frontend and Python backend, deployed on Vercel.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Document Upload**: Upload PDF, TXT, and DOCX files with metadata
+- **Semantic Search**: Advanced vector search using Pinecone and BAAI embeddings
+- **AI-Powered Answers**: Generate contextual answers using OpenAI or Groq
+- **Modern UI**: Clean React interface with real-time search
+- **Serverless**: Fully deployed on Vercel with Python serverless functions
 
-## Expanding the ESLint configuration
+## Tech Stack
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### Frontend
+
+- React 19 with Vite
+- Modern CSS with responsive design
+- PDF.js for document processing
+
+### Backend
+
+- Python serverless functions (Vercel)
+- Pinecone vector database
+- Hugging Face Inference API for embeddings
+- OpenAI/Groq for text generation
+
+## Quick Start
+
+1. **Clone the repository**
+
+   ```bash
+   git clone <repository-url>
+   cd RAG-Play
+   ```
+
+2. **Set up environment variables**
+   Create a `.env` file in the root directory:
+
+   ```
+   PINECONE_API_KEY=your_pinecone_key
+   HUGGINGFACE_API_KEY=your_hf_key
+   OPENAI_API_KEY=your_openai_key
+   ```
+
+3. **Install dependencies**
+
+   ```bash
+   npm install
+   ```
+
+4. **Run development server**
+
+   ```bash
+   npm run dev
+   ```
+
+5. **Deploy to Vercel**
+   ```bash
+   vercel --prod
+   ```
+
+## API Endpoints
+
+- `/api/search` - Document search and answer generation
+- `/api/upload` - Document upload and processing
+- `/api/docs` - List all uploaded documents
+
+## Environment Variables
+
+See `api/README.md` for detailed environment variable configuration.
+
+## License
+
+MIT License

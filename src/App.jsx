@@ -95,7 +95,7 @@ export default function App() {
   function onHistoryClick(_item) {}
 
   function onClearFilters() {
-    setHybridWeight(0.5)
+    // Reset filters if needed
   }
 
   function validateFiles(files) {
