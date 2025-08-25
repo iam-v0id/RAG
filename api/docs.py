@@ -3,6 +3,32 @@ from http.server import BaseHTTPRequestHandler
 import json
 import os
 import sys
+from typing import Optional
+import pathlib
+from urllib.parse import urlparse, parse_qs
+
+# Load .env from repo root (or nearest) for local/dev runs
+try:
+    from dotenv import load_dotenv, find_dotenv  # type: ignore
+
+    loaded = False
+    try:
+        found = find_dotenv(usecwd=False)
+        if found:
+            load_dotenv(found)
+            loaded = True
+    except Exception:
+        pass
+
+    if not loaded:
+        api_dir = pathlib.Path(__file__).resolve().parent
+        rag_dir = api_dir.parent
+        candidate = rag_dir / ".env"
+        if candidate.exists():
+            load_dotenv(candidate.as_posix())
+            loaded = True
+except Exception:
+    pass
 
 # Ensure this directory is on sys.path so we can import core.search
 CURRENT_DIR = os.path.dirname(__file__)
@@ -26,17 +52,37 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
-            # Check if required environment variables are set
-            if not os.getenv("PINECONE_API_KEY"):
-                self.send_response(500)
+            # Diagnostic: check env vars first and short-circuit with a clear response
+            required_vars = [
+                "PINECONE_API_KEY",
+                "PINECONE_INDEX_NAME",
+                "PINECONE_CLOUD",
+                "PINECONE_REGION",
+            ]
+            missing = [v for v in required_vars if not os.getenv(v)]
+
+            # If any required envs are missing, return a 200 diagnostic so it is visible in Vercel quickly
+            if missing:
+                mask = lambda v: (
+                    (v[:6] + "...") if (v and len(v) > 6) else v
+                )  # noqa: E731
+                payload = {
+                    "ok": False,
+                    "reason": "missing_env",
+                    "missing": missing,
+                    "env": {
+                        "PINECONE_API_KEY": mask(os.getenv("PINECONE_API_KEY")),
+                        "PINECONE_INDEX_NAME": os.getenv("PINECONE_INDEX_NAME"),
+                        "PINECONE_CLOUD": os.getenv("PINECONE_CLOUD"),
+                        "PINECONE_REGION": os.getenv("PINECONE_REGION"),
+                        "DOCS_NAMESPACE": os.getenv("DOCS_NAMESPACE"),
+                    },
+                }
+                self.send_response(200)
                 self.send_header("Content-type", "application/json")
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
-                error_response = {
-                    "error": "Missing PINECONE_API_KEY environment variable",
-                    "message": "Please set PINECONE_API_KEY in your Vercel environment variables",
-                }
-                self.wfile.write(json.dumps(error_response).encode())
+                self.wfile.write(json.dumps(payload).encode())
                 return
 
             # Initialize clients
@@ -112,6 +158,10 @@ class handler(BaseHTTPRequestHandler):
 
         except Exception as e:
             print(f"Error in docs endpoint: {e}")
+            import traceback
+
+            traceback.print_exc()
+
             self.send_response(500)
             self.send_header("Content-type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -119,5 +169,7 @@ class handler(BaseHTTPRequestHandler):
             error_response = {
                 "error": f"Internal server error: {str(e)}",
                 "message": "An unexpected error occurred. Check the server logs for details.",
+                "type": type(e).__name__,
+                "details": str(e),
             }
             self.wfile.write(json.dumps(error_response).encode())

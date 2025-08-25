@@ -7,9 +7,27 @@ import time
 
 # Optionally load env vars in development
 try:
-    from dotenv import load_dotenv  # type: ignore
+    from dotenv import load_dotenv, find_dotenv  # type: ignore
+    import pathlib
 
-    load_dotenv()
+    # 1) Try auto-discovery upwards from this file
+    loaded = False
+    try:
+        found = find_dotenv(usecwd=False)
+        if found:
+            load_dotenv(found)
+            loaded = True
+    except Exception:
+        pass
+
+    # 2) If not found, try explicit parent: RAG/.env when running from RAG/api/
+    if not loaded:
+        api_dir = pathlib.Path(__file__).resolve().parent
+        rag_dir = api_dir.parent
+        candidate = rag_dir / ".env"
+        if candidate.exists():
+            load_dotenv(candidate.as_posix())
+            loaded = True
 except Exception:
     pass
 
