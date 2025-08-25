@@ -275,8 +275,8 @@ def pinecone_search(
     print(f"DEBUG: _pinecone_index: {_pinecone_index}")
     print(f"DEBUG: _hf_model: {_hf_model}")
 
-    if _pinecone_index is None or _hf_model is None:
-        print(f"DEBUG: Missing Pinecone index or model")
+    if _pinecone_index is None:
+        print(f"DEBUG: Missing Pinecone index")
         return []
 
     print(f"DEBUG: Embedding query...")
