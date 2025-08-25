@@ -11,9 +11,6 @@
     }
   ],
   "routes": [
-    { "src": "/api/minimal", "dest": "/api/minimal.py" },
-    { "src": "/api/test", "dest": "/api/test.py" },
-    { "src": "/api/search-v2", "dest": "/api/search_v2.py" },
     { "src": "/api/search", "dest": "/api/search.py" },
     { "src": "/api/upload", "dest": "/api/upload.py" },
     { "src": "/api/docs", "dest": "/api/docs.py" },
