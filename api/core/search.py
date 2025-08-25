@@ -113,11 +113,11 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
         vecs = _hf_model.encode(texts, show_progress_bar=False)
         return vecs.tolist() if hasattr(vecs, "tolist") else vecs  # type: ignore
 
-    # Fallback: use Hugging Face Inference API for embeddings (free tier available)
+    # Use Hugging Face Inference API for embeddings
     hf_token = os.getenv("HUGGINGFACE_API_KEY") or os.getenv("HF_TOKEN")
-    model_id = os.getenv("HF_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+    model_id = os.getenv("HF_EMBED_MODEL", "BAAI/bge-small-en-v1.5")
 
-    # Use the correct endpoint for sentence-transformers models
+    # Use the direct model endpoint
     api_url = f"https://api-inference.huggingface.co/models/{model_id}"
 
     headers = {"Content-Type": "application/json"}
@@ -133,23 +133,9 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
         json={"inputs": texts},
         timeout=60.0,
     )
-    if resp.status_code >= 400:
-        print(f"Warning: Hugging Face API failed ({resp.status_code}): {resp.text}")
-        print("Falling back to random embeddings for demo purposes")
-        # Fallback: create random embeddings for demo
-        import random
 
-        random.seed(42)  # For reproducible results
-        embeddings = []
-        for text in texts:
-            # Create a 384-dimensional random vector
-            embedding = [random.uniform(-1, 1) for _ in range(384)]
-            # Normalize to unit length
-            norm = sum(x * x for x in embedding) ** 0.5
-            if norm > 0:
-                embedding = [x / norm for x in embedding]
-            embeddings.append(embedding)
-        return embeddings
+    if resp.status_code >= 400:
+        raise RuntimeError(f"Hugging Face API failed ({resp.status_code}): {resp.text}")
 
     data = resp.json()
 
