@@ -7,6 +7,7 @@ from typing import Any, Dict
 
 from core.search import (
     init_clients,
+    embed_texts,
     simple_chunks,
     make_chunk_records,
     embed_and_upsert,
@@ -120,13 +121,11 @@ def handler(request):
 
         # Also store a registry entry for document listing
         registry_namespace = os.getenv("DOCS_NAMESPACE", "docs_registry")
-        # Use neutral vector for registry - we don't need embeddings for document listing
-        neutral_vector = [0.0] * 384
         index.upsert(
             vectors=[
                 {
                     "id": f"doc::{doc_id}",
-                    "values": neutral_vector,
+                    "values": embed_texts([f"{title}\n{content}"])[0],
                     "metadata": {
                         "doc_id": doc_id,
                         "title": title,
