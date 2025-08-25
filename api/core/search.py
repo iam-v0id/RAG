@@ -13,8 +13,11 @@ try:
 except Exception:
     pass
 
-# Core deps
-import numpy as np  # noqa: F401 (reserved for future scoring/normalization)
+# Core deps (optional)
+try:
+    import numpy as np  # noqa: F401
+except Exception:
+    np = None  # type: ignore
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -101,19 +104,63 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
         vecs = _hf_model.encode(texts, show_progress_bar=False)
         return vecs.tolist() if hasattr(vecs, "tolist") else vecs  # type: ignore
 
-    # Fallback: use OpenAI embeddings API (lighter for Vercel)
-    api_key = os.getenv("OPENAI_API_KEY")
-    embed_model = os.getenv("EMBED_MODEL", "text-embedding-3-small")
-    if not api_key:
+    # Fallback: use Hugging Face Inference API for embeddings (free tier available)
+    hf_token = os.getenv("HUGGINGFACE_API_KEY") or os.getenv("HF_TOKEN")
+    model_id = os.getenv("HF_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+    api_url = (
+        f"https://api-inference.huggingface.co/pipeline/feature-extraction/{model_id}"
+    )
+
+    headers = {"Content-Type": "application/json"}
+    if hf_token:
+        headers["Authorization"] = f"Bearer {hf_token}"
+
+    import httpx  # type: ignore
+
+    # HF API accepts a single string or list of strings. We'll send list to get batched output.
+    resp = httpx.post(
+        api_url,
+        headers=headers,
+        json={"inputs": texts, "options": {"wait_for_model": True}},
+        timeout=60.0,
+    )
+    if resp.status_code >= 400:
         raise RuntimeError(
-            "Embedding model not initialized and OPENAI_API_KEY is missing."
+            f"Hugging Face embedding request failed: {resp.status_code} {resp.text}"
         )
 
-    from openai import OpenAI  # type: ignore
+    data = resp.json()
 
-    client = OpenAI(api_key=api_key)
-    resp = client.embeddings.create(model=embed_model, input=texts)
-    return [d.embedding for d in resp.data]
+    # Response can be list[list[float]] for single input or list[list[list[float]]] when batching token vectors.
+    # For sentence-transformers feature-extraction pipeline, output is token-level; we need to pool to sentence.
+    # We'll mean-pool across tokens per input.
+    def mean_pool(token_vectors: List[List[float]]) -> List[float]:
+        if not token_vectors:
+            return []
+        dim = len(token_vectors[0]) if token_vectors[0] else 0
+        sums = [0.0] * dim
+        for tv in token_vectors:
+            for i in range(dim):
+                sums[i] += float(tv[i])
+        return [s / max(1, len(token_vectors)) for s in sums]
+
+    # If the API returns a list for single input, normalize to batch
+    if (
+        texts
+        and isinstance(data, list)
+        and data
+        and isinstance(data[0], list)
+        and data
+        and isinstance(data[0][0], (int, float))
+    ):
+        # Single input, token-level vectors
+        return [mean_pool(data)]
+
+    # Otherwise, expect list of inputs each with token-level vectors
+    out: List[List[float]] = []
+    for item in data:
+        out.append(mean_pool(item))
+    return out
 
 
 # ---------------- Chunking & Ingestion ----------------
