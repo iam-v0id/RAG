@@ -213,8 +213,24 @@ export default function App() {
 
   function onDeleteDoc(docId) {
     if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) return
-    setDocuments(docs => docs.filter(d => d.id !== docId))
-    alert('Document deleted successfully')
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/docs?id=${encodeURIComponent(docId)}`, { method: 'DELETE' })
+        if (!res.ok) throw new Error('Delete failed')
+        const data = await res.json()
+        if (data && data.ok) {
+          setDocuments(docs => docs.filter(d => d.id !== docId))
+          setUploadState(s => ({ ...s, recentDocs: s.recentDocs.filter(d => d.id !== docId) }))
+          // Optionally refetch to ensure consistency with backend
+          try { await onRefreshDocs() } catch (_) {}
+          alert('Document deleted from Pinecone successfully')
+        } else {
+          alert('Failed to delete document. Please try again.')
+        }
+      } catch (e) {
+        alert('Delete failed. Check backend logs.')
+      }
+    })()
   }
 
   async function onRefreshDocs() {
