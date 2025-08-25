@@ -221,13 +221,12 @@ export default function App() {
         if (data && data.ok) {
           setDocuments(docs => docs.filter(d => d.id !== docId))
           setUploadState(s => ({ ...s, recentDocs: s.recentDocs.filter(d => d.id !== docId) }))
-          // Optionally refetch to ensure consistency with backend
-          try { await onRefreshDocs() } catch (_) {}
           alert('Document deleted from Pinecone successfully')
         } else {
           alert('Failed to delete document. Please try again.')
         }
       } catch (e) {
+        console.error('Delete error:', e)
         alert('Delete failed. Check backend logs.')
       }
     })()

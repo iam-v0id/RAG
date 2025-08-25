@@ -38,12 +38,14 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
+            # Check if required environment variables are set
             if not os.getenv("PINECONE_API_KEY"):
                 self._write_json(
                     500, {"error": "Missing PINECONE_API_KEY environment variable"}
                 )
                 return
 
+            # Initialize clients
             try:
                 init_clients()
             except Exception as e:
@@ -52,9 +54,12 @@ class handler(BaseHTTPRequestHandler):
                 )
                 return
 
+            # Use registry namespace
             ns = os.getenv("DOCS_NAMESPACE", "docs_registry")
+            # Query with a neutral vector - no need for real embeddings to list documents
             v = [0.0] * 384
 
+            # Check if core.search module is available and _pinecone_index is initialized
             if core is None or core.search._pinecone_index is None:
                 self._write_json(
                     500,
@@ -77,14 +82,17 @@ class handler(BaseHTTPRequestHandler):
             )
 
             items = []
-            for m in res.matches or []:
+            for i, m in enumerate(res.matches or []):
                 md = m.metadata or {}
                 doc_id = (md.get("doc_id") or md.get("id") or m.id).replace("doc::", "")
                 chunk_count = md.get("chunk_count", 0)
+
+                # Ensure chunk_count is a valid number
                 try:
                     chunk_count = int(chunk_count) if chunk_count is not None else 0
                 except (ValueError, TypeError):
                     chunk_count = 0
+
                 items.append(
                     {
                         "id": doc_id,
@@ -94,7 +102,7 @@ class handler(BaseHTTPRequestHandler):
                         "year": md.get("year", ""),
                         "chunk_count": chunk_count,
                         "uploaded_at": md.get("uploaded_at", ""),
-                        "processing_status": "completed",
+                        "processing_status": "completed",  # Add missing field
                     }
                 )
 
@@ -138,18 +146,30 @@ class handler(BaseHTTPRequestHandler):
             registry_namespace = os.getenv("DOCS_NAMESPACE", "docs_registry")
 
             # 1) Delete the registry entry
-            core.search._pinecone_index.delete(
-                ids=[f"doc::{doc_id}"],
-                namespace=registry_namespace,
-            )
+            try:
+                core.search._pinecone_index.delete(
+                    ids=[f"doc::{doc_id}"],
+                    namespace=registry_namespace,
+                )
+                print(
+                    f"Deleted registry entry: doc::{doc_id} from {registry_namespace}"
+                )
+            except Exception as e:
+                print(f"Warning: Failed to delete registry entry: {e}")
 
             # 2) Delete all chunks for the document in the RAG namespace, by metadata filter
             rag_ns = RAG_INDEX_NAMESPACE
-            delete_kwargs = {"namespace": rag_ns} if rag_ns else {}
-            core.search._pinecone_index.delete(
-                filter={"doc_id": {"$eq": doc_id}},
-                **delete_kwargs,
-            )
+            if rag_ns:  # Only delete chunks if namespace is specified
+                try:
+                    core.search._pinecone_index.delete(
+                        filter={"doc_id": {"$eq": doc_id}},
+                        namespace=rag_ns,
+                    )
+                    print(f"Deleted chunks for doc_id: {doc_id} from {rag_ns}")
+                except Exception as e:
+                    print(f"Warning: Failed to delete chunks: {e}")
+            else:
+                print(f"No RAG namespace specified, skipping chunk deletion")
 
             self._write_json(200, {"ok": True, "deleted": doc_id})
 

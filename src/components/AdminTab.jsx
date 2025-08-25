@@ -45,7 +45,7 @@ export default function AdminTab({ metrics, documents, onDeleteDoc, queryLogs, o
                       </div>
                     </div>
                     <div className="admin-document-actions">
-                      <button className="btn btn--outline btn--sm">View</button>
+                      <button className="btn btn--outline btn--sm" disabled>View (Disabled)</button>
                       <button className="btn btn--outline btn--sm" onClick={() => onDeleteDoc(doc.id)}>Delete</button>
                     </div>
                   </div>
