@@ -9,7 +9,7 @@ CURRENT_DIR = os.path.dirname(__file__)
 if CURRENT_DIR not in sys.path:
     sys.path.append(CURRENT_DIR)
 
-from core.search import init_clients, embed_texts, _pinecone_index
+from core.search import init_clients, _pinecone_index
 
 
 class handler(BaseHTTPRequestHandler):
@@ -27,13 +27,8 @@ class handler(BaseHTTPRequestHandler):
 
             # Use registry namespace
             ns = os.getenv("DOCS_NAMESPACE", "docs_registry")
-            # Query with a neutral vector
+            # Query with a neutral vector - no need for real embeddings to list documents
             v = [0.0] * 384
-            # If embedding model available, create a real vector
-            try:
-                v = embed_texts(["documents"])[0]
-            except Exception:
-                pass
 
             res = _pinecone_index.query(
                 vector=v, top_k=500, include_metadata=True, namespace=ns
