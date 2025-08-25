@@ -18,6 +18,11 @@
     { "src": "/api/search", "dest": "/api/search.py" },
     { "src": "/api/upload", "dest": "/api/upload.py" },
     { "src": "/api/docs", "dest": "/api/docs.py" },
+    { "src": "/assets/(.*)", "dest": "/assets/$1" },
+    {
+      "src": "/(.*.(js|css|svg|png|jpg|jpeg|gif|ico|txt|webp|json))",
+      "dest": "/$1"
+    },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
