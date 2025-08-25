@@ -13,24 +13,21 @@ try:
 except Exception:
     pass
 
-# Core deps (optional)
+# Core deps (required)
 try:
     import numpy as np  # noqa: F401
 except ImportError as e:
-    print(f"Warning: numpy not available: {e}")
-    np = None  # type: ignore
+    raise RuntimeError(f"numpy is required but not available: {e}")
 
 try:
     from sentence_transformers import SentenceTransformer
 except ImportError as e:
-    print(f"Warning: sentence-transformers not available: {e}")
-    SentenceTransformer = None  # type: ignore
+    raise RuntimeError(f"sentence-transformers is required but not available: {e}")
 
 try:
     from pinecone import Pinecone, ServerlessSpec
 except ImportError as e:
-    print(f"Warning: pinecone-client not available: {e}")
-    Pinecone = None  # type: ignore
+    raise RuntimeError(f"pinecone-client is required but not available: {e}")
 
 
 # ---------------- Configuration ----------------
@@ -71,20 +68,21 @@ def now_ms() -> int:
 # ---------------- Initialization ----------------
 def init_clients():
     global _pc, _pinecone_index, _hf_model
-    if Pinecone is None:
-        raise RuntimeError(
-            "Missing Pinecone client. Add 'pinecone-client' to requirements."
-        )
+
+    # Check required environment variables
     if not os.getenv("PINECONE_API_KEY"):
         raise RuntimeError("Missing PINECONE_API_KEY in environment.")
-    # Always initialize Pinecone client and index
+    if not os.getenv("HUGGINGFACE_API_KEY") and not os.getenv("HF_TOKEN"):
+        raise RuntimeError("Missing HUGGINGFACE_API_KEY or HF_TOKEN in environment.")
+
+    # Initialize Pinecone client and index
     try:
         _pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
         try:
             existing = [idx.name for idx in _pc.list_indexes().indexes]
         except Exception as e:
-            print(f"Warning: Could not list existing indexes: {e}")
-            existing = []
+            raise RuntimeError(f"Failed to list Pinecone indexes: {e}")
+
         if PINECONE_INDEX_NAME not in existing:
             _pc.create_index(
                 name=PINECONE_INDEX_NAME,
@@ -96,78 +94,84 @@ def init_clients():
     except Exception as e:
         raise RuntimeError(f"Failed to initialize Pinecone: {e}")
 
-    # Initialize local embedding model only if available; otherwise we'll use API embeddings
-    if _hf_model is None and SentenceTransformer is not None:
-        try:
-            _hf_model = SentenceTransformer(RAG_MODEL_NAME)
-        except Exception as e:
-            print(f"Warning: Could not load sentence transformer model: {e}")
-            _hf_model = None
+    # Always use Hugging Face API for embeddings (BAAI model)
+    _hf_model = None  # We'll use HF API instead of local model
 
 
 # ---------------- Embeddings ----------------
 def embed_texts(texts: List[str]) -> List[List[float]]:
-    # Prefer local model if available
-    if _hf_model is not None:
-        vecs = _hf_model.encode(texts, show_progress_bar=False)
-        return vecs.tolist() if hasattr(vecs, "tolist") else vecs  # type: ignore
+    """Generate embeddings using BAAI/bge-small-en-v1.5 via Hugging Face API"""
+    if not texts:
+        return []
 
-    # Use Hugging Face Inference API for embeddings
     hf_token = os.getenv("HUGGINGFACE_API_KEY") or os.getenv("HF_TOKEN")
-    model_id = os.getenv("HF_EMBED_MODEL", "BAAI/bge-small-en-v1.5")
+    if not hf_token:
+        raise RuntimeError("Missing HUGGINGFACE_API_KEY or HF_TOKEN for embeddings")
 
-    # Use the direct model endpoint
+    model_id = os.getenv("HF_EMBED_MODEL", "BAAI/bge-small-en-v1.5")
     api_url = f"https://api-inference.huggingface.co/models/{model_id}"
 
-    headers = {"Content-Type": "application/json"}
-    if hf_token:
-        headers["Authorization"] = f"Bearer {hf_token}"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {hf_token}",
+    }
 
     import httpx  # type: ignore
 
-    # HF API accepts a single string or list of strings. We'll send list to get batched output.
-    resp = httpx.post(
-        api_url,
-        headers=headers,
-        json={"inputs": texts},
-        timeout=60.0,
-    )
+    try:
+        resp = httpx.post(
+            api_url,
+            headers=headers,
+            json={"inputs": texts},
+            timeout=60.0,
+        )
 
-    if resp.status_code >= 400:
-        raise RuntimeError(f"Hugging Face API failed ({resp.status_code}): {resp.text}")
+        if resp.status_code >= 400:
+            raise RuntimeError(
+                f"Hugging Face API failed ({resp.status_code}): {resp.text}"
+            )
 
-    data = resp.json()
+        data = resp.json()
 
-    # Response can be list[list[float]] for single input or list[list[list[float]]] when batching token vectors.
-    # For sentence-transformers feature-extraction pipeline, output is token-level; we need to pool to sentence.
-    # We'll mean-pool across tokens per input.
-    def mean_pool(token_vectors: List[List[float]]) -> List[float]:
-        if not token_vectors:
-            return []
-        dim = len(token_vectors[0]) if token_vectors[0] else 0
-        sums = [0.0] * dim
-        for tv in token_vectors:
-            for i in range(dim):
-                sums[i] += float(tv[i])
-        return [s / max(1, len(token_vectors)) for s in sums]
+        # Handle different response formats from BAAI model
+        if isinstance(data, list) and len(data) > 0:
+            if (
+                isinstance(data[0], list)
+                and len(data[0]) > 0
+                and isinstance(data[0][0], (int, float))
+            ):
+                # Token-level vectors, need to mean pool
+                def mean_pool(token_vectors: List[List[float]]) -> List[float]:
+                    if not token_vectors:
+                        return []
+                    dim = len(token_vectors[0]) if token_vectors[0] else 0
+                    sums = [0.0] * dim
+                    for tv in token_vectors:
+                        for i in range(dim):
+                            sums[i] += float(tv[i])
+                    return [s / max(1, len(token_vectors)) for s in sums]
 
-    # If the API returns a list for single input, normalize to batch
-    if (
-        texts
-        and isinstance(data, list)
-        and data
-        and isinstance(data[0], list)
-        and data
-        and isinstance(data[0][0], (int, float))
-    ):
-        # Single input, token-level vectors
-        return [mean_pool(data)]
+                # Single input case
+                if len(texts) == 1:
+                    return [mean_pool(data)]
+                # Multiple inputs case
+                return [mean_pool(item) for item in data]
+            elif isinstance(data[0], (int, float)):
+                # Direct embedding vectors
+                return [data] if len(texts) == 1 else data
+            else:
+                raise RuntimeError(
+                    f"Unexpected response format from Hugging Face API: {type(data)}"
+                )
+        else:
+            raise RuntimeError(
+                f"Empty or invalid response from Hugging Face API: {data}"
+            )
 
-    # Otherwise, expect list of inputs each with token-level vectors
-    out: List[List[float]] = []
-    for item in data:
-        out.append(mean_pool(item))
-    return out
+    except httpx.RequestError as e:
+        raise RuntimeError(f"Failed to connect to Hugging Face API: {e}")
+    except Exception as e:
+        raise RuntimeError(f"Embedding generation failed: {e}")
 
 
 # ---------------- Chunking & Ingestion ----------------
@@ -348,15 +352,19 @@ def call_llm_rerank_and_generate(prompt: str) -> Dict[str, Any]:
     """
     Calls the LLM once to both rerank and generate.
     Expects STRICT JSON: {"ranked_indices":[...], "answer":"..."}
-    Returns {} on failure (caller will fallback).
+    Raises exception on failure.
     """
-    # Prefer Groq if configured
+    # Check for required API keys
+    if not GROQ_API_KEY and not OPENAI_API_KEY:
+        raise RuntimeError(
+            "No LLM API key configured. Set GROQ_API_KEY or OPENAI_API_KEY"
+        )
+
     try:
         if GROQ_API_KEY:
             from openai import OpenAI  # type: ignore
 
             client = OpenAI(api_key=GROQ_API_KEY, base_url=GROQ_BASE_URL)
-
             resp = client.chat.completions.create(
                 model=GROQ_MODEL,
                 messages=[{"role": "user", "content": prompt}],
@@ -365,8 +373,6 @@ def call_llm_rerank_and_generate(prompt: str) -> Dict[str, Any]:
             )
             text = (resp.choices[0].message.content or "").strip()
         else:
-            if not OPENAI_API_KEY:
-                return {}
             from openai import OpenAI  # type: ignore
 
             client = OpenAI(api_key=OPENAI_API_KEY)
@@ -385,20 +391,21 @@ def call_llm_rerank_and_generate(prompt: str) -> Dict[str, Any]:
         obj = json.loads(json_text)
 
         if not isinstance(obj, dict):
-            return {}
+            raise RuntimeError("LLM response is not a valid JSON object")
         if "ranked_indices" not in obj or "answer" not in obj:
-            return {}
+            raise RuntimeError(
+                "LLM response missing required fields: ranked_indices, answer"
+            )
         if not isinstance(obj["ranked_indices"], list) or not isinstance(
             obj["answer"], str
         ):
-            return {}
-        # validate indices are ints
+            raise RuntimeError("LLM response has invalid field types")
         if not all(isinstance(x, int) for x in obj["ranked_indices"]):
-            return {}
+            raise RuntimeError("LLM response has invalid indices")
 
         return obj
     except Exception as e:
-        return {"_error": str(e)}
+        raise RuntimeError(f"LLM generation failed: {e}")
 
 
 def single_call_rerank_and_generate(
@@ -409,12 +416,6 @@ def single_call_rerank_and_generate(
 
     prompt = build_single_call_prompt(query, hits, return_k)
     obj = call_llm_rerank_and_generate(prompt)
-
-    if not obj:
-        # Fallback: no LLM or parsing failed
-        ranked = hits[:return_k]
-        answer = f"Found {len(ranked)} relevant source chunk(s). No generator configured; returning sources only."
-        return {"ranked": ranked, "answer": answer}
 
     order: List[int] = obj.get("ranked_indices", [])
     # Map 1-based indices to hits

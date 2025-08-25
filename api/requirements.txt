@@ -1,4 +1,5 @@
-# Core dependencies for RAG API
+# Required dependencies for RAG API
+# Core dependencies for document upload -> BAAI embeddings -> Pinecone storage
 python-dotenv==1.0.1
 pinecone-client==5.0.1
 openai==1.51.2
