@@ -212,41 +212,22 @@ export default function App() {
   }
 
   function onDeleteDoc(docId) {
-    console.log('Delete button clicked for docId:', docId)
-    if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
-      console.log('Delete cancelled by user')
-      return
-    }
-    console.log('Proceeding with delete...')
+    if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) return
     ;(async () => {
       try {
-        const deleteUrl = `/api/docs?id=${encodeURIComponent(docId)}`
-        console.log('Making DELETE request to:', deleteUrl)
-        const res = await fetch(deleteUrl, { method: 'DELETE' })
-        console.log('Delete response status:', res.status)
-        console.log('Delete response ok:', res.ok)
-        
-        if (!res.ok) {
-          const errorText = await res.text()
-          console.error('Delete failed with status:', res.status, 'Error:', errorText)
-          throw new Error(`Delete failed: ${res.status} ${errorText}`)
-        }
-        
+        const res = await fetch(`/api/docs?id=${encodeURIComponent(docId)}`, { method: 'DELETE' })
+        if (!res.ok) throw new Error('Delete failed')
         const data = await res.json()
-        console.log('Delete response data:', data)
-        
         if (data && data.ok) {
           setDocuments(docs => docs.filter(d => d.id !== docId))
           setUploadState(s => ({ ...s, recentDocs: s.recentDocs.filter(d => d.id !== docId) }))
-          console.log('Document deleted successfully from state')
           alert('Document deleted from Pinecone successfully')
         } else {
-          console.error('Delete response indicates failure:', data)
           alert('Failed to delete document. Please try again.')
         }
       } catch (e) {
         console.error('Delete error:', e)
-        alert(`Delete failed: ${e.message}`)
+        alert('Delete failed. Check backend logs.')
       }
     })()
   }

@@ -113,28 +113,22 @@ class handler(BaseHTTPRequestHandler):
             self._write_json(500, {"error": f"Internal server error: {str(e)}"})
 
     def do_DELETE(self):
-        print(f"DELETE request received: {self.path}")
         try:
             if not os.getenv("PINECONE_API_KEY"):
-                print("ERROR: Missing PINECONE_API_KEY")
                 self._write_json(
                     500, {"error": "Missing PINECONE_API_KEY environment variable"}
                 )
                 return
 
             try:
-                print("Initializing clients...")
                 init_clients()
-                print("Clients initialized successfully")
             except Exception as e:
-                print(f"ERROR: Failed to initialize clients: {e}")
                 self._write_json(
                     500, {"error": f"Failed to initialize clients: {str(e)}"}
                 )
                 return
 
             if core is None or core.search._pinecone_index is None:
-                print("ERROR: Pinecone index not initialized")
                 self._write_json(500, {"error": "Pinecone index not initialized"})
                 return
 
@@ -142,27 +136,20 @@ class handler(BaseHTTPRequestHandler):
             parsed = urlparse(self.path)
             qs = parse_qs(parsed.query)
             doc_id = (qs.get("id", [""])[0] or "").strip()
-            print(f"Extracted doc_id from query: '{doc_id}'")
 
             if not doc_id:
-                print("ERROR: Missing doc_id parameter")
                 self._write_json(
                     400, {"error": "Missing required 'id' query parameter"}
                 )
                 return
 
             registry_namespace = os.getenv("DOCS_NAMESPACE", "docs_registry")
-            print(f"Using registry namespace: {registry_namespace}")
 
             # 1) Delete the registry entry
             try:
-                print(f"Deleting registry entry: doc::{doc_id}")
                 core.search._pinecone_index.delete(
                     ids=[f"doc::{doc_id}"],
                     namespace=registry_namespace,
-                )
-                print(
-                    f"Deleted registry entry: doc::{doc_id} from {registry_namespace}"
                 )
             except Exception as e:
                 print(f"Warning: Failed to delete registry entry: {e}")
@@ -171,18 +158,13 @@ class handler(BaseHTTPRequestHandler):
             rag_ns = RAG_INDEX_NAMESPACE
             if rag_ns:  # Only delete chunks if namespace is specified
                 try:
-                    print(f"Deleting chunks for doc_id: {doc_id} from {rag_ns}")
                     core.search._pinecone_index.delete(
                         filter={"doc_id": {"$eq": doc_id}},
                         namespace=rag_ns,
                     )
-                    print(f"Deleted chunks for doc_id: {doc_id} from {rag_ns}")
                 except Exception as e:
                     print(f"Warning: Failed to delete chunks: {e}")
-            else:
-                print(f"No RAG namespace specified, skipping chunk deletion")
 
-            print(f"Delete operation completed successfully for doc_id: {doc_id}")
             self._write_json(200, {"ok": True, "deleted": doc_id})
 
         except Exception as e:
