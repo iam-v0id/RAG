@@ -93,7 +93,12 @@ def handler(request):
 
         # Also store a registry entry for document listing
         registry_namespace = os.getenv("DOCS_NAMESPACE", "docs_registry")
+
+        # Ensure Pinecone index is properly initialized
         from core.search import _pinecone_index
+
+        if _pinecone_index is None:
+            raise RuntimeError("Pinecone index not initialized")
 
         _pinecone_index.upsert(
             vectors=[
