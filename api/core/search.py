@@ -73,7 +73,6 @@ def init_clients():
         raise RuntimeError("Missing PINECONE_API_KEY in environment.")
     if _pc is None:
         _pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
-        # Ensure index exists (default 384 dims for all-MiniLM-L6-v2)
         try:
             existing = [idx.name for idx in _pc.list_indexes().indexes]
         except Exception:
@@ -87,20 +86,34 @@ def init_clients():
             )
         _pinecone_index = _pc.Index(PINECONE_INDEX_NAME)
 
-    if SentenceTransformer is None:
-        raise RuntimeError(
-            "Missing SentenceTransformer. Add 'sentence-transformers' to requirements."
-        )
-    if _hf_model is None:
-        _hf_model = SentenceTransformer(RAG_MODEL_NAME)
+    # Initialize local embedding model only if available; otherwise we'll use API embeddings
+    if _hf_model is None and SentenceTransformer is not None:
+        try:
+            _hf_model = SentenceTransformer(RAG_MODEL_NAME)
+        except Exception:
+            _hf_model = None
 
 
 # ---------------- Embeddings ----------------
 def embed_texts(texts: List[str]) -> List[List[float]]:
-    if _hf_model is None:
-        raise RuntimeError("Embedding model not initialized.")
-    vecs = _hf_model.encode(texts, show_progress_bar=False)
-    return vecs.tolist() if hasattr(vecs, "tolist") else vecs
+    # Prefer local model if available
+    if _hf_model is not None:
+        vecs = _hf_model.encode(texts, show_progress_bar=False)
+        return vecs.tolist() if hasattr(vecs, "tolist") else vecs  # type: ignore
+
+    # Fallback: use OpenAI embeddings API (lighter for Vercel)
+    api_key = os.getenv("OPENAI_API_KEY")
+    embed_model = os.getenv("EMBED_MODEL", "text-embedding-3-small")
+    if not api_key:
+        raise RuntimeError(
+            "Embedding model not initialized and OPENAI_API_KEY is missing."
+        )
+
+    from openai import OpenAI  # type: ignore
+
+    client = OpenAI(api_key=api_key)
+    resp = client.embeddings.create(model=embed_model, input=texts)
+    return [d.embedding for d in resp.data]
 
 
 # ---------------- Chunking & Ingestion ----------------
