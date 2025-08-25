@@ -113,7 +113,8 @@ def handler(request):
                 vectors=[
                     {
                         "id": f"doc::{doc_id}",
-                        "values": [0.0] * 384,  # Dummy vector for registry
+                        "values": [0.1]
+                        * 384,  # Non-zero vector for registry (Pinecone requirement)
                         "metadata": {
                             "doc_id": doc_id,
                             "title": title,
