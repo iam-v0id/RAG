@@ -10,10 +10,11 @@ if CURRENT_DIR not in sys.path:
     sys.path.append(CURRENT_DIR)
 
 try:
-    from core.search import init_clients, _pinecone_index
+    from core.search import init_clients
+    import core.search
 except ImportError as e:
     print(f"Import error: {e}")
-    _pinecone_index = None
+    core = None
 
 
 class handler(BaseHTTPRequestHandler):
@@ -55,7 +56,7 @@ class handler(BaseHTTPRequestHandler):
             # Query with a neutral vector - no need for real embeddings to list documents
             v = [0.0] * 384
 
-            res = _pinecone_index.query(
+            res = core.search._pinecone_index.query(
                 vector=v, top_k=500, include_metadata=True, namespace=ns
             )
 
