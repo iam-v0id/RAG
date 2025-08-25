@@ -87,37 +87,50 @@ def handler(request):
 
         # Chunk and store the document using the same logic as search.py
         chunk_records = make_chunk_records(doc)
+        print(f"Created {len(chunk_records)} chunk records")
 
         # Store chunks in the main RAG namespace (same as search.py uses)
-        embed_and_upsert(chunk_records)
+        try:
+            embed_and_upsert(chunk_records)
+            print("Successfully embedded and upserted chunks")
+        except Exception as e:
+            print(f"Error in embed_and_upsert: {e}")
+            raise
 
         # Also store a registry entry for document listing
         registry_namespace = os.getenv("DOCS_NAMESPACE", "docs_registry")
+        print(f"Using registry namespace: {registry_namespace}")
 
         # Ensure Pinecone index is properly initialized
         from core.search import _pinecone_index
 
         if _pinecone_index is None:
+            print("ERROR: _pinecone_index is None")
             raise RuntimeError("Pinecone index not initialized")
 
-        _pinecone_index.upsert(
-            vectors=[
-                {
-                    "id": f"doc::{doc_id}",
-                    "values": [0.0] * 384,  # Dummy vector for registry
-                    "metadata": {
-                        "doc_id": doc_id,
-                        "title": title,
-                        "department": department,
-                        "category": category,
-                        "year": year,
-                        "chunk_count": len(chunk_records),
-                        "uploaded_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    },
-                }
-            ],
-            namespace=registry_namespace,
-        )
+        try:
+            _pinecone_index.upsert(
+                vectors=[
+                    {
+                        "id": f"doc::{doc_id}",
+                        "values": [0.0] * 384,  # Dummy vector for registry
+                        "metadata": {
+                            "doc_id": doc_id,
+                            "title": title,
+                            "department": department,
+                            "category": category,
+                            "year": year,
+                            "chunk_count": len(chunk_records),
+                            "uploaded_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                        },
+                    }
+                ],
+                namespace=registry_namespace,
+            )
+            print("Successfully upserted registry entry")
+        except Exception as e:
+            print(f"Error upserting registry entry: {e}")
+            raise
 
         return _json(None, 200, {"ok": True, "id": doc_id})
 
