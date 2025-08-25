@@ -56,6 +56,24 @@ class handler(BaseHTTPRequestHandler):
             # Query with a neutral vector - no need for real embeddings to list documents
             v = [0.0] * 384
 
+            # Check if core.search module is available and _pinecone_index is initialized
+            if core is None or core.search._pinecone_index is None:
+                self.send_response(500)
+                self.send_header("Content-type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                error_response = {
+                    "error": "Pinecone index not initialized",
+                    "details": {
+                        "core_available": core is not None,
+                        "pinecone_index_available": (
+                            core.search._pinecone_index is not None if core else False
+                        ),
+                    },
+                }
+                self.wfile.write(json.dumps(error_response).encode())
+                return
+
             res = core.search._pinecone_index.query(
                 vector=v, top_k=500, include_metadata=True, namespace=ns
             )

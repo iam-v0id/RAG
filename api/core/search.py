@@ -77,24 +77,25 @@ def init_clients():
         )
     if not os.getenv("PINECONE_API_KEY"):
         raise RuntimeError("Missing PINECONE_API_KEY in environment.")
-    if _pc is None:
+    # Always initialize Pinecone client and index
+    try:
+        _pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
         try:
-            _pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
-            try:
-                existing = [idx.name for idx in _pc.list_indexes().indexes]
-            except Exception as e:
-                print(f"Warning: Could not list existing indexes: {e}")
-                existing = []
-            if PINECONE_INDEX_NAME not in existing:
-                _pc.create_index(
-                    name=PINECONE_INDEX_NAME,
-                    dimension=384,
-                    metric="cosine",
-                    spec=ServerlessSpec(cloud=PINECONE_CLOUD, region=PINECONE_REGION),
-                )
-            _pinecone_index = _pc.Index(PINECONE_INDEX_NAME)
+            existing = [idx.name for idx in _pc.list_indexes().indexes]
         except Exception as e:
-            raise RuntimeError(f"Failed to initialize Pinecone: {e}")
+            print(f"Warning: Could not list existing indexes: {e}")
+            existing = []
+        if PINECONE_INDEX_NAME not in existing:
+            _pc.create_index(
+                name=PINECONE_INDEX_NAME,
+                dimension=384,
+                metric="cosine",
+                spec=ServerlessSpec(cloud=PINECONE_CLOUD, region=PINECONE_REGION),
+            )
+        _pinecone_index = _pc.Index(PINECONE_INDEX_NAME)
+        print(f"DEBUG: Pinecone index initialized: {_pinecone_index}")
+    except Exception as e:
+        raise RuntimeError(f"Failed to initialize Pinecone: {e}")
 
     # Initialize local embedding model only if available; otherwise we'll use API embeddings
     if _hf_model is None and SentenceTransformer is not None:
