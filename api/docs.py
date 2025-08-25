@@ -88,6 +88,11 @@ class handler(BaseHTTPRequestHandler):
             # Initialize clients
             try:
                 init_clients()
+                # Check if _pinecone_index was actually initialized
+                if _pinecone_index is None:
+                    raise RuntimeError(
+                        "Pinecone index initialization failed - index is None"
+                    )
             except Exception as e:
                 self.send_response(500)
                 self.send_header("Content-type", "application/json")
@@ -95,7 +100,13 @@ class handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 error_response = {
                     "error": f"Failed to initialize clients: {str(e)}",
-                    "message": "Check your Pinecone configuration and API key",
+                    "message": "Check your Pinecone configuration and API key. The index may not exist yet.",
+                    "details": {
+                        "index_name": os.getenv("PINECONE_INDEX_NAME", "company-docs"),
+                        "region": os.getenv("PINECONE_REGION", "us-east-1"),
+                        "cloud": os.getenv("PINECONE_CLOUD", "aws"),
+                        "pinecone_index_initialized": _pinecone_index is not None,
+                    },
                 }
                 self.wfile.write(json.dumps(error_response).encode())
                 return
@@ -118,7 +129,12 @@ class handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 error_response = {
                     "error": f"Failed to query Pinecone: {str(e)}",
-                    "message": "Check your Pinecone index configuration",
+                    "message": "Check your Pinecone index configuration. The index may be empty or the namespace may not exist.",
+                    "details": {
+                        "index_name": os.getenv("PINECONE_INDEX_NAME", "company-docs"),
+                        "namespace": ns,
+                        "error_type": type(e).__name__,
+                    },
                 }
                 self.wfile.write(json.dumps(error_response).encode())
                 return
