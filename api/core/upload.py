@@ -5,13 +5,13 @@ import time
 import os
 from typing import Any, Dict
 
-from search import (
+from core.search import (
     init_clients,
     embed_texts,
     simple_chunks,
     make_chunk_records,
     embed_and_upsert,
-)  # reuse from search
+)  # reuse from core.search
 
 try:
     from pinecone import Pinecone, ServerlessSpec
