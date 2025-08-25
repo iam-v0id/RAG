@@ -19,10 +19,5 @@
     { "src": "/api/upload", "dest": "/api/upload.py" },
     { "src": "/api/docs", "dest": "/api/docs.py" },
     { "src": "/(.*)", "dest": "/index.html" }
-  ],
-  "functions": {
-    "api/*.py": {
-      "maxDuration": 30
-    }
-  }
+  ]
 }
