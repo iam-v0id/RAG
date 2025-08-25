@@ -37,10 +37,11 @@ if CURRENT_DIR not in sys.path:
     sys.path.append(CURRENT_DIR)
 
 try:
-    from core.search import init_clients, _pinecone_index
+    from core.search import init_clients
+    import core.search
 except ImportError as e:
     print(f"Import error: {e}")
-    _pinecone_index = None
+    core = None
 
 
 class handler(BaseHTTPRequestHandler):
@@ -98,7 +99,7 @@ class handler(BaseHTTPRequestHandler):
             try:
                 init_clients()
                 # Check if _pinecone_index was actually initialized
-                if _pinecone_index is None:
+                if core.search._pinecone_index is None:
                     raise RuntimeError(
                         "Pinecone index initialization failed - index is None"
                     )
@@ -114,7 +115,9 @@ class handler(BaseHTTPRequestHandler):
                         "index_name": os.getenv("PINECONE_INDEX_NAME", "company-docs"),
                         "region": os.getenv("PINECONE_REGION", "us-east-1"),
                         "cloud": os.getenv("PINECONE_CLOUD", "aws"),
-                        "pinecone_index_initialized": _pinecone_index is not None,
+                        "pinecone_index_initialized": (
+                            core.search._pinecone_index is not None if core else False
+                        ),
                     },
                 }
                 self.wfile.write(json.dumps(error_response).encode())
@@ -128,7 +131,7 @@ class handler(BaseHTTPRequestHandler):
             v = [0.0] * 384
 
             try:
-                res = _pinecone_index.query(
+                res = core.search._pinecone_index.query(
                     vector=v, top_k=500, include_metadata=True, namespace=ns
                 )
             except Exception as e:
