@@ -15,8 +15,8 @@ from core.search import (
 
 try:
     from pinecone import Pinecone, ServerlessSpec
-except ImportError as e:
-    raise RuntimeError(f"pinecone-client is required but not available: {e}")
+except Exception:  # pragma: no cover
+    Pinecone = None
 
 
 def _json(headers: Dict[str, str] | None, status: int, body: Dict[str, Any]):

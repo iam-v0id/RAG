@@ -21,7 +21,6 @@ export default function App() {
   const [uploadState, setUploadState] = useState({ visible: false, progress: 0, text: '', recentDocs: [] })
   const [metadataState, setMetadataState] = useState({ visible: false, auto: {}, fields: { title: '', author: '', category: '', department: '', confidentiality_level: '', year: new Date().getFullYear(), tags: '' } })
   const [processingTimeout, setProcessingTimeout] = useState(null)
-  const [isRefreshing, setIsRefreshing] = useState(false)
 
   useEffect(() => {
     // Fetch server-side document registry
@@ -217,27 +216,15 @@ export default function App() {
     alert('Document deleted successfully')
   }
 
-  async function onRefreshDocs() {
-    if (isRefreshing) return // Prevent multiple simultaneous refreshes
-    
-    setIsRefreshing(true)
+  function onRefreshDocs() {
     try {
-      const res = await fetch('/api/docs')
-      if (res.ok) {
-        const data = await res.json()
-        const items = Array.isArray(data.items) ? data.items : []
-        setDocuments(items)
-        setUploadState(s => ({ ...s, recentDocs: items.slice(0, 10) }))
-        console.log(`Refreshed ${items.length} documents from backend`)
-      } else {
-        console.error('Failed to refresh documents:', res.status, res.statusText)
-        alert('Failed to refresh documents. Please try again.')
+      const saved = JSON.parse(localStorage.getItem('uploadedDocs') || '[]')
+      if (Array.isArray(saved)) {
+        setDocuments(saved)
+        setUploadState(s => ({ ...s, recentDocs: saved.slice(0, 10) }))
       }
-    } catch (error) {
-      console.error('Error refreshing documents:', error)
-      alert('Error refreshing documents. Please check your connection.')
-    } finally {
-      setIsRefreshing(false)
+    } catch (_) {
+      setUploadState(s => ({ ...s }))
     }
   }
 
@@ -257,7 +244,7 @@ export default function App() {
           <UploadTab onFiles={onFiles} uploadState={{ ...uploadState, recentDocs: documents.slice(0, 10) }} metadataState={metadataState} onCancelMetadata={onCancelMetadata} onSubmitMetadata={onSubmitMetadata} setMetadataField={setMetadataField} />
         )}
         {currentTab === 'admin' && (
-          <AdminTab metrics={metrics} documents={documents} onDeleteDoc={onDeleteDoc} queryLogs={queryLogs} onRefresh={onRefreshDocs} isRefreshing={isRefreshing} />
+          <AdminTab metrics={metrics} documents={documents} onDeleteDoc={onDeleteDoc} queryLogs={queryLogs} onRefresh={onRefreshDocs} />
         )}
       </div>
     </div>
