@@ -36,7 +36,7 @@ You need to set the following environment variables in your Vercel project:
 
 7. **HUGGINGFACE_API_KEY** - Hugging Face API key
 
-   - Used for embeddings if sentence-transformers is not available
+   - Used for embeddings (recommended for serverless environments)
 
 8. **DOCS_NAMESPACE** - Namespace for document registry (default: "docs_registry")
 
@@ -93,6 +93,25 @@ After setting up environment variables, you can test your deployment:
 2. Check that your Pinecone account is active
 3. Ensure the region matches your Pinecone index
 
+### Build Failures
+
+**Cause**: Large dependencies causing timeout or memory issues
+
+**Solution**:
+
+1. The current setup uses lightweight dependencies
+2. Uses Hugging Face API for embeddings instead of local models
+3. If you still have issues, consider using a different deployment platform
+
+## Architecture Notes
+
+This deployment is optimized for Vercel's serverless environment:
+
+- **Lightweight Dependencies**: Removed heavy ML libraries like `sentence-transformers`
+- **API-based Embeddings**: Uses Hugging Face API instead of local models
+- **Minimal Bundle Size**: Only essential packages included
+- **Better Error Handling**: More descriptive error messages
+
 ## Local Testing
 
 You can test locally before deploying:
@@ -119,3 +138,4 @@ If you're still having issues:
 2. Check Vercel function logs for detailed error messages
 3. Verify all environment variables are set correctly
 4. Ensure your Pinecone account and API key are valid
+5. Consider the lightweight architecture if you need to reduce bundle size

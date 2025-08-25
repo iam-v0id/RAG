@@ -20,11 +20,9 @@ except ImportError as e:
     print(f"Warning: numpy not available: {e}")
     np = None  # type: ignore
 
-try:
-    from sentence_transformers import SentenceTransformer
-except ImportError as e:
-    print(f"Warning: sentence-transformers not available: {e}")
-    SentenceTransformer = None  # type: ignore
+# Note: sentence-transformers removed to reduce bundle size
+# Using Hugging Face API for embeddings instead
+SentenceTransformer = None
 
 try:
     from pinecone import Pinecone, ServerlessSpec
@@ -96,13 +94,9 @@ def init_clients():
         except Exception as e:
             raise RuntimeError(f"Failed to initialize Pinecone: {e}")
 
-    # Initialize local embedding model only if available; otherwise we'll use API embeddings
-    if _hf_model is None and SentenceTransformer is not None:
-        try:
-            _hf_model = SentenceTransformer(RAG_MODEL_NAME)
-        except Exception as e:
-            print(f"Warning: Could not load sentence transformer model: {e}")
-            _hf_model = None
+    # Note: Using Hugging Face API for embeddings instead of local models
+    # This reduces bundle size and works better in serverless environments
+    _hf_model = None
 
 
 # ---------------- Embeddings ----------------
@@ -275,8 +269,8 @@ def pinecone_search(
     print(f"DEBUG: _pinecone_index: {_pinecone_index}")
     print(f"DEBUG: _hf_model: {_hf_model}")
 
-    if _pinecone_index is None or _hf_model is None:
-        print(f"DEBUG: Missing Pinecone index or model")
+    if _pinecone_index is None:
+        print(f"DEBUG: Missing Pinecone index")
         return []
 
     print(f"DEBUG: Embedding query...")

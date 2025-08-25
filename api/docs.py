@@ -33,7 +33,8 @@ class handler(BaseHTTPRequestHandler):
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 error_response = {
-                    "error": "Missing PINECONE_API_KEY environment variable"
+                    "error": "Missing PINECONE_API_KEY environment variable",
+                    "message": "Please set PINECONE_API_KEY in your Vercel environment variables",
                 }
                 self.wfile.write(json.dumps(error_response).encode())
                 return
@@ -46,18 +47,35 @@ class handler(BaseHTTPRequestHandler):
                 self.send_header("Content-type", "application/json")
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
-                error_response = {"error": f"Failed to initialize clients: {str(e)}"}
+                error_response = {
+                    "error": f"Failed to initialize clients: {str(e)}",
+                    "message": "Check your Pinecone configuration and API key",
+                }
                 self.wfile.write(json.dumps(error_response).encode())
                 return
 
             # Use registry namespace
             ns = os.getenv("DOCS_NAMESPACE", "docs_registry")
-            # Query with a neutral vector - no need for real embeddings to list documents
+
+            # Create a simple query vector (all zeros) to list documents
+            # This is a lightweight approach that doesn't require embedding models
             v = [0.0] * 384
 
-            res = _pinecone_index.query(
-                vector=v, top_k=500, include_metadata=True, namespace=ns
-            )
+            try:
+                res = _pinecone_index.query(
+                    vector=v, top_k=500, include_metadata=True, namespace=ns
+                )
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                error_response = {
+                    "error": f"Failed to query Pinecone: {str(e)}",
+                    "message": "Check your Pinecone index configuration",
+                }
+                self.wfile.write(json.dumps(error_response).encode())
+                return
 
             items = []
             for i, m in enumerate(res.matches or []):
@@ -80,7 +98,7 @@ class handler(BaseHTTPRequestHandler):
                         "year": md.get("year", ""),
                         "chunk_count": chunk_count,
                         "uploaded_at": md.get("uploaded_at", ""),
-                        "processing_status": "completed",  # Add missing field
+                        "processing_status": "completed",
                     }
                 )
 
@@ -98,5 +116,8 @@ class handler(BaseHTTPRequestHandler):
             self.send_header("Content-type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            error_response = {"error": f"Internal server error: {str(e)}"}
+            error_response = {
+                "error": f"Internal server error: {str(e)}",
+                "message": "An unexpected error occurred. Check the server logs for details.",
+            }
             self.wfile.write(json.dumps(error_response).encode())
