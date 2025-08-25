@@ -1376,6 +1376,20 @@ select.form-control {
   gap: var(--space-12);
 }
 
+.no-documents {
+  text-align: center;
+  padding: var(--space-32);
+  color: var(--color-text-secondary);
+  background-color: var(--color-bg-1);
+  border-radius: var(--radius-base);
+  border: 1px solid var(--color-card-border-inner);
+}
+
+.no-documents p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+
 .admin-document-item {
   display: flex;
   justify-content: space-between;
