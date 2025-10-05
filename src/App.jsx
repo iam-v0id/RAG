@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Header from './components/Header'
 import NavTabs from './components/NavTabs'
-import AuthModal from './components/AuthModal'
 import SearchTab from './components/SearchTab'
 import UploadTab from './components/UploadTab'
 import AdminTab from './components/AdminTab'
@@ -9,12 +8,11 @@ import AdminTab from './components/AdminTab'
 import { extractTextFromPdf } from './lib/utils'
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState(null)
+  const [currentUser, setCurrentUser] = useState({ id: 'user_001', username: 'demo_user', email: 'demo@company.com', role: 'admin', department: 'Engineering' })
   const [currentTab, setCurrentTab] = useState('search')
   const [documents, setDocuments] = useState([])
   const [queryHistory, setQueryHistory] = useState([])
   const [queryLogs, setQueryLogs] = useState([])
-  const [authError, setAuthError] = useState('')
   // hybridWeight removed (Pinecone-only backend)
   const [results, setResults] = useState(null)
 
@@ -49,18 +47,8 @@ export default function App() {
     system_uptime: '2d 14h 32m',
   }), [documents, queryLogs])
 
-  function handleLogin(username, password) {
-    if (username === 'demo_user' && password === 'password') {
-      setCurrentUser({ id: 'user_001', username: 'demo_user', email: 'demo@company.com', role: 'admin', department: 'Engineering' })
-      setAuthError('')
-    } else {
-      setAuthError('Invalid username or password. Use demo_user / password')
-    }
-  }
-
   function handleLogout() {
     setCurrentUser(null)
-    setAuthError('')
   }
 
   async function onSearch(query, filters) {
@@ -258,10 +246,7 @@ export default function App() {
 
   return (
     <div>
-      {!currentUser && (
-        <AuthModal onLogin={handleLogin} error={authError} />
-      )}
-      <div id="app" className={!currentUser ? 'hidden' : ''}>
+      <div id="app">
         <Header username={currentUser?.username || ''} onLogout={handleLogout} />
         <NavTabs currentTab={currentTab} onSwitch={setCurrentTab} />
 
